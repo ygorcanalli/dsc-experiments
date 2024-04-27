@@ -1,6 +1,7 @@
 import numpy as np
-
+from scipy.stats import spearmanr, pearsonr
 from tensorflow.keras import Sequential
+from tensorflow.keras.regularizers import Regularizer, L1, L2, L1L2
 from tensorflow.keras.losses import binary_crossentropy
 from tensorflow.keras.layers import InputLayer, Dropout, Dense
 from tensorflow.keras.callbacks import EarlyStopping
@@ -133,7 +134,7 @@ class FairTransitionLossMLP(Transformer):
                  privileged_demotion=0.1, privileged_promotion=0.01,
                  protected_demotion=0.01, protected_promotion=0.1,
                  hidden_sizes=[32, 64, 32], dropout=0.1, patience=5,
-                 num_epochs=50, batch_size=64):
+                 num_epochs=50, batch_size=64, corr_type=None, l2=0.0):
         self.p_privileged = np.array([[1 - privileged_demotion, privileged_demotion],
                                       [privileged_promotion, 1 - privileged_promotion]])
         self.p_protected = np.array([[1 - protected_demotion, protected_demotion],
@@ -145,6 +146,13 @@ class FairTransitionLossMLP(Transformer):
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.dropout = dropout
+        self.corr_type = corr_type
+        if corr_type == 'spearman':
+            self.corr_fn = spearmanr
+        else:
+            self.corr_fn = pearsonr
+        self.corr = None
+        self.l2 = l2
         self.patience = patience
         self.sensitive_attr = sensitive_attr
         self.classes_ = None
@@ -152,7 +160,14 @@ class FairTransitionLossMLP(Transformer):
 
     def _compile_model(self):
         self.model = Sequential()
-        self.model.add(InputLayer(input_shape=self.input_shape))
+        if self.corr and self.l2 is not None:
+            self.model.add(Dense(units=self.input_shape,
+                           kernel_regularizer=FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)))
+        elif self.l2 is not None:
+            self.model.add(Dense(units=self.input_shape,
+                           kernel_regularizer=L2(self.l2)))
+        else:
+            self.model.add(Dense(units=self.input_shape))
 
         for hidden_size in self.hidden_sizes:
             self.model.add(Dense(hidden_size, activation='relu'))
@@ -163,12 +178,6 @@ class FairTransitionLossMLP(Transformer):
                            loss=fair_forward(self.p_privileged, self.p_protected))
 
     def fit(self, dataset, verbose=False):
-        if self.model is None:
-            self.input_shape = dataset.features.shape[1]
-            self._compile_model()
-            self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
-
-        callback = EarlyStopping(monitor='val_loss', patience=self.patience, restore_best_weights=True)
 
         X = dataset.features
         y_expanded = np.zeros(shape=(X.shape[0], 4))
@@ -176,11 +185,19 @@ class FairTransitionLossMLP(Transformer):
 
         y_expanded[:, 0] = (dataset.protected_attributes[:, sensitive_index] == dataset.privileged_protected_attributes[
             sensitive_index]).astype(int)
-        y_expanded[:, 1] = (
-                    dataset.protected_attributes[:, sensitive_index] == dataset.unprivileged_protected_attributes[
+        y_expanded[:, 1] = (dataset.protected_attributes[:, sensitive_index] == dataset.unprivileged_protected_attributes[
                 sensitive_index]).astype(int)
         y_expanded[:, 2] = (dataset.labels == dataset.unfavorable_label).reshape(X.shape[0]).astype(int)
         y_expanded[:, 3] = (dataset.labels == dataset.favorable_label).reshape(X.shape[0]).astype(int)
+
+        if self.model is None:
+            self.input_shape = dataset.features.shape[1]
+            self.corr = [abs(self.corr_fn(dataset.features[:, i], y_expanded[:, 1])[0])
+                         for i in range(dataset.features.shape[1])]
+            self._compile_model()
+            self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
+
+        callback = EarlyStopping(monitor='val_loss', patience=self.patience, restore_best_weights=True)
 
         self.history = self.model.fit(X, y_expanded, epochs=self.num_epochs,
                                       batch_size=self.batch_size, callbacks=[callback],
@@ -477,6 +494,30 @@ class AdaptativePriorityReweightingEOP(Transformer):
     def predict(self, X):
         return self.model.predict(X)
 
+class L2CorrelationRegularizer(Regularizer):
+    def __init__(self, l2=0., corr=None):
+        self.l2 = l2
+        self.corr = corr
+    def __call__(self, x):
+        return self.l2 * ops.sum(ops.multiply(self.corr, ops.square(x)))
+    def get_config(self):
+        return {'l2': float(self.l2),
+                'corr': self.corr}
+
+class FeaturewiseRegularizer(Regularizer):
+    def __init__(self, lambdas, l2):
+        # lambdas should be an array of regularization coefficients, one per feature
+        self.lambdas = K.constant(lambdas)
+        self.l2 = l2
+
+    def __call__(self, x):
+        # Custom regularization: l2 * sum of lambda[i] * x[i]^2 across all features
+        return self.l2 * K.sum(self.lambdas * K.square(x))
+
+    def get_config(self):
+        # This method enables the regularizer to be serialized
+        return {'lambdas': self.lambdas.numpy().tolist(),
+                'l2': self.l2}
 
 def describe_metrics(metrics):
     print("Overall accuracy: {:6.4f}".format(metrics['overall_acc']))

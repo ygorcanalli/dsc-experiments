@@ -152,16 +152,20 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
 
 def ftl_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
     hidden_sizes = [100,100]
+
+
     if type(hyperparameters) is not dict:
+        corr_type = hyperparameters.suggest_categorical('corr_type', ['pearson'])
+        l2 = hyperparameters.suggest_categorical('l2', [1e-4, 1e-5])
         dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
-    else:
-        dropout = hyperparameters['dropout']
-    if type(hyperparameters) is not dict:
         privileged_demotion = hyperparameters.suggest_float('privileged_demotion', 0.0, 1.0)
         privileged_promotion = hyperparameters.suggest_float('privileged_promotion', 0.0, 1.0)
         protected_demotion = hyperparameters.suggest_float('protected_demotion', 0.0, 1.0)
         protected_promotion = hyperparameters.suggest_float('protected_promotion', 0.0, 1.0)
     else:
+        corr_type = hyperparameters['corr_type']
+        l2 = hyperparameters['l2']
+        dropout = hyperparameters['dropout']
         privileged_demotion = hyperparameters['privileged_demotion']
         privileged_promotion = hyperparameters['privileged_promotion']
         protected_demotion = hyperparameters['protected_demotion']
@@ -175,7 +179,8 @@ def ftl_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyper
                                       privileged_demotion=privileged_demotion,
                                       privileged_promotion=privileged_promotion,
                                       protected_demotion=protected_demotion,
-                                      protected_promotion=protected_promotion)
+                                      protected_promotion=protected_promotion,
+                                      corr_type=corr_type, l2=l2)
     else:
         model = FairTransitionLossMLP(sensitive_attr=sens_attr,
                                       hidden_sizes=[32],
@@ -325,8 +330,8 @@ methods = [
     #adaptative_priority_reweighting_classifier_initializer
     #meta_fair_classifier_sr_initializer,
     #gerry_fair_classifier_initializer,
-    simple_mlp_initializer,
-    #ftl_mlp_initializer,
+    #simple_mlp_initializer,
+    ftl_mlp_initializer
     #adversarial_debiasing_initializer
     #prejudice_remover_initializer
 ]
