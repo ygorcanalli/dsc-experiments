@@ -86,7 +86,7 @@ def eval(model, dataset, unprivileged_groups, privileged_groups, fitness_rule, h
         metrics['solution'] = hyperparameters.params
     else:
         metrics['solution'] = hyperparameters
-
+    metrics['corr'] = model.corr
     return metrics
 
 
@@ -156,7 +156,7 @@ def ftl_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyper
 
     if type(hyperparameters) is not dict:
         corr_type = hyperparameters.suggest_categorical('corr_type', ['pearson'])
-        l2 = hyperparameters.suggest_categorical('l2', [1e-4, 1e-5])
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2,1e-3,1e-4])
         dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
         privileged_demotion = hyperparameters.suggest_float('privileged_demotion', 0.0, 1.0)
         privileged_promotion = hyperparameters.suggest_float('privileged_promotion', 0.0, 1.0)

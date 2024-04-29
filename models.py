@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import spearmanr, pearsonr
+from tensorflow import broadcast_to, expand_dims
 from tensorflow.keras import Sequential
 from tensorflow.keras.regularizers import Regularizer, L1, L2, L1L2
 from tensorflow.keras.losses import binary_crossentropy
@@ -160,22 +161,26 @@ class FairTransitionLossMLP(Transformer):
 
     def _compile_model(self):
         self.model = Sequential()
-        if self.corr and self.l2 is not None:
-            self.model.add(Dense(units=self.input_shape,
-                           kernel_regularizer=FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)))
-        elif self.l2 is not None:
-            self.model.add(Dense(units=self.input_shape,
-                           kernel_regularizer=L2(self.l2)))
-        else:
-            self.model.add(Dense(units=self.input_shape))
+        self.model.add(InputLayer(input_shape=self.input_shape))
 
-        for hidden_size in self.hidden_sizes:
-            self.model.add(Dense(hidden_size, activation='relu'))
-            self.model.add(Dropout(self.dropout))
+        for i, hidden_size in enumerate(self.hidden_sizes):
+            if i == 0:
+                self.model.add(Dense(units=hidden_size, activation='relu',
+                                     kernel_regularizer=FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)))
+            else:
+                self.model.add(Dense(hidden_size, activation='relu'))
+                self.model.add(Dropout(self.dropout))
 
         self.model.add(Dense(self.num_classes, activation="softmax"))
         self.model.compile(optimizer=Adam(learning_rate=3e-4),
                            loss=fair_forward(self.p_privileged, self.p_protected))
+
+    def _calculate_corr(self, features, sensitive_feature):
+        self.corr = np.array([abs(self.corr_fn(features[:, i], sensitive_feature)[0])
+                     for i in range(features.shape[1])])
+        #self.corr[self.corr == 1.0] = 0.0
+        self.corr[np.isnan(self.corr)] = 0.0
+        self.corr = self.corr.tolist()
 
     def fit(self, dataset, verbose=False):
 
@@ -192,8 +197,7 @@ class FairTransitionLossMLP(Transformer):
 
         if self.model is None:
             self.input_shape = dataset.features.shape[1]
-            self.corr = [abs(self.corr_fn(dataset.features[:, i], y_expanded[:, 1])[0])
-                         for i in range(dataset.features.shape[1])]
+            self._calculate_corr(dataset.features, y_expanded[:, 1])
             self._compile_model()
             self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
 
@@ -494,25 +498,16 @@ class AdaptativePriorityReweightingEOP(Transformer):
     def predict(self, X):
         return self.model.predict(X)
 
-class L2CorrelationRegularizer(Regularizer):
-    def __init__(self, l2=0., corr=None):
-        self.l2 = l2
-        self.corr = corr
-    def __call__(self, x):
-        return self.l2 * ops.sum(ops.multiply(self.corr, ops.square(x)))
-    def get_config(self):
-        return {'l2': float(self.l2),
-                'corr': self.corr}
-
 class FeaturewiseRegularizer(Regularizer):
     def __init__(self, lambdas, l2):
         # lambdas should be an array of regularization coefficients, one per feature
         self.lambdas = K.constant(lambdas)
+        self.lambdas = expand_dims(self.lambdas, axis=1)
         self.l2 = l2
 
     def __call__(self, x):
-        # Custom regularization: l2 * sum of lambda[i] * x[i]^2 across all features
-        return self.l2 * K.sum(self.lambdas * K.square(x))
+        # Custom regularization: l2 * sum of lambda[i] * sqrt(x[i]) across all features
+        return self.l2 * K.sum(broadcast_to(self.lambdas, x.shape) * K.square(x))
 
     def get_config(self):
         # This method enables the regularizer to be serialized
