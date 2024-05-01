@@ -75,7 +75,8 @@ class SimpleMLP(Transformer):
 
     def __init__(self, sensitive_attr='',
                  hidden_sizes=[32, 64, 32], dropout=0.1,
-                 num_epochs=20, batch_size=64, patience=5):
+                 num_epochs=20, batch_size=64, patience=5,
+                 corr_type=None, l2=0.0):
 
         self.model = None
         self.hidden_sizes = hidden_sizes
@@ -84,28 +85,44 @@ class SimpleMLP(Transformer):
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.dropout = dropout
+        self.corr_type = corr_type
+        if corr_type == 'spearman':
+            self.corr_fn = spearmanr
+        else:
+            self.corr_fn = pearsonr
+        self.corr = None
+        self.l2 = l2
         self.patience = patience
         self.sensitive_attr = sensitive_attr
         self.classes_ = None
         self.history = None
 
+    def _calculate_corr(self, features, sensitive_feature):
+        self.corr = np.array([abs(self.corr_fn(features[:, i], sensitive_feature)[0])
+                     for i in range(features.shape[1])])
+        self.corr[np.isnan(self.corr)] = 0.0
+        self.corr = self.corr.tolist()
+
     def _compile_model(self):
         self.model = Sequential()
         self.model.add(InputLayer(input_shape=self.input_shape))
-
-        for hidden_size in self.hidden_sizes:
-            self.model.add(Dense(hidden_size, activation='relu'))
-            self.model.add(Dropout(self.dropout))
+        if self.corr is not None:
+            regularizer = FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)
+        else:
+            regularizer = None
+        for i, hidden_size in enumerate(self.hidden_sizes):
+            if i == 0:
+                self.model.add(Dense(units=hidden_size, activation='relu',
+                                     kernel_regularizer=regularizer))
+            else:
+                self.model.add(Dense(hidden_size, activation='relu'))
+                self.model.add(Dropout(self.dropout))
 
         self.model.add(Dense(self.num_classes, activation="softmax"))
         self.model.compile(optimizer=Adam(learning_rate=3e-4),
                            loss='categorical_crossentropy')
 
     def fit(self, dataset, verbose=False):
-        if self.model is None:
-            self.input_shape = dataset.features.shape[1]
-            self._compile_model()
-            self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
 
         callback = EarlyStopping(monitor='val_loss', patience=self.patience, restore_best_weights=True)
         dataset_cp = dataset.copy()
@@ -114,6 +131,13 @@ class SimpleMLP(Transformer):
 
         y_expanded[:, 0] = (dataset_cp.labels == dataset_cp.unfavorable_label).reshape(X.shape[0]).astype(int)
         y_expanded[:, 1] = (dataset_cp.labels == dataset_cp.favorable_label).reshape(X.shape[0]).astype(int)
+
+        if self.model is None:
+            self.input_shape = dataset.features.shape[1]
+            if self.corr_type is not None:
+                self._calculate_corr(dataset.features, y_expanded[:, 1])
+            self._compile_model()
+            self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
 
         self.history = self.model.fit(X, y_expanded, epochs=self.num_epochs,
                                       batch_size=self.batch_size, callbacks=[callback],
@@ -162,11 +186,14 @@ class FairTransitionLossMLP(Transformer):
     def _compile_model(self):
         self.model = Sequential()
         self.model.add(InputLayer(input_shape=self.input_shape))
-
+        if self.corr is not None:
+            regularizer = FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)
+        else:
+            regularizer = None
         for i, hidden_size in enumerate(self.hidden_sizes):
             if i == 0:
                 self.model.add(Dense(units=hidden_size, activation='relu',
-                                     kernel_regularizer=FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)))
+                                     kernel_regularizer=regularizer))
             else:
                 self.model.add(Dense(hidden_size, activation='relu'))
                 self.model.add(Dropout(self.dropout))
@@ -178,7 +205,6 @@ class FairTransitionLossMLP(Transformer):
     def _calculate_corr(self, features, sensitive_feature):
         self.corr = np.array([abs(self.corr_fn(features[:, i], sensitive_feature)[0])
                      for i in range(features.shape[1])])
-        #self.corr[self.corr == 1.0] = 0.0
         self.corr[np.isnan(self.corr)] = 0.0
         self.corr = self.corr.tolist()
 
@@ -197,7 +223,8 @@ class FairTransitionLossMLP(Transformer):
 
         if self.model is None:
             self.input_shape = dataset.features.shape[1]
-            self._calculate_corr(dataset.features, y_expanded[:, 1])
+            if self.corr_type is not None:
+                self._calculate_corr(dataset.features, y_expanded[:, 1])
             self._compile_model()
             self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
 

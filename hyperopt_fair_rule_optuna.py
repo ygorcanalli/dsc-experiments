@@ -150,21 +150,89 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
 
     return best_result
 
-def ftl_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
-    hidden_sizes = [100,100]
 
-
+def ftl_mlp_sreg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100, 100]
+    corr_type = 'spearman'
     if type(hyperparameters) is not dict:
-        corr_type = hyperparameters.suggest_categorical('corr_type', ['pearson'])
-        l2 = hyperparameters.suggest_categorical('l2', [1e-2,1e-3,1e-4])
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2, 1e-3, 1e-4])
         dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
         privileged_demotion = hyperparameters.suggest_float('privileged_demotion', 0.0, 1.0)
         privileged_promotion = hyperparameters.suggest_float('privileged_promotion', 0.0, 1.0)
         protected_demotion = hyperparameters.suggest_float('protected_demotion', 0.0, 1.0)
         protected_promotion = hyperparameters.suggest_float('protected_promotion', 0.0, 1.0)
     else:
-        corr_type = hyperparameters['corr_type']
         l2 = hyperparameters['l2']
+        dropout = hyperparameters['dropout']
+        privileged_demotion = hyperparameters['privileged_demotion']
+        privileged_promotion = hyperparameters['privileged_promotion']
+        protected_demotion = hyperparameters['protected_demotion']
+        protected_promotion = hyperparameters['protected_promotion']
+
+    if hyperparameters is not None:
+        model = FairTransitionLossMLP(sensitive_attr=sens_attr,
+                                      hidden_sizes=hidden_sizes,
+                                      dropout=dropout,
+                                      batch_size=64,
+                                      privileged_demotion=privileged_demotion,
+                                      privileged_promotion=privileged_promotion,
+                                      protected_demotion=protected_demotion,
+                                      protected_promotion=protected_promotion,
+                                      corr_type=corr_type, l2=l2)
+    else:
+        model = FairTransitionLossMLP(sensitive_attr=sens_attr,
+                                      hidden_sizes=[32],
+                                      dropout=0.1,
+                                      batch_size=64)
+    return model
+
+
+def ftl_mlp_preg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100, 100]
+    corr_type = 'pearson'
+    if type(hyperparameters) is not dict:
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2, 1e-3, 1e-4])
+        dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
+        privileged_demotion = hyperparameters.suggest_float('privileged_demotion', 0.0, 1.0)
+        privileged_promotion = hyperparameters.suggest_float('privileged_promotion', 0.0, 1.0)
+        protected_demotion = hyperparameters.suggest_float('protected_demotion', 0.0, 1.0)
+        protected_promotion = hyperparameters.suggest_float('protected_promotion', 0.0, 1.0)
+    else:
+        l2 = hyperparameters['l2']
+        dropout = hyperparameters['dropout']
+        privileged_demotion = hyperparameters['privileged_demotion']
+        privileged_promotion = hyperparameters['privileged_promotion']
+        protected_demotion = hyperparameters['protected_demotion']
+        protected_promotion = hyperparameters['protected_promotion']
+
+    if hyperparameters is not None:
+        model = FairTransitionLossMLP(sensitive_attr=sens_attr,
+                                      hidden_sizes=hidden_sizes,
+                                      dropout=dropout,
+                                      batch_size=64,
+                                      privileged_demotion=privileged_demotion,
+                                      privileged_promotion=privileged_promotion,
+                                      protected_demotion=protected_demotion,
+                                      protected_promotion=protected_promotion,
+                                      corr_type=corr_type, l2=l2)
+    else:
+        model = FairTransitionLossMLP(sensitive_attr=sens_attr,
+                                      hidden_sizes=[32],
+                                      dropout=0.1,
+                                      batch_size=64)
+    return model
+
+def ftl_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100,100]
+    corr_type = None
+    l2 = 0.0
+    if type(hyperparameters) is not dict:
+        dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
+        privileged_demotion = hyperparameters.suggest_float('privileged_demotion', 0.0, 1.0)
+        privileged_promotion = hyperparameters.suggest_float('privileged_promotion', 0.0, 1.0)
+        protected_demotion = hyperparameters.suggest_float('protected_demotion', 0.0, 1.0)
+        protected_promotion = hyperparameters.suggest_float('protected_promotion', 0.0, 1.0)
+    else:
         dropout = hyperparameters['dropout']
         privileged_demotion = hyperparameters['privileged_demotion']
         privileged_promotion = hyperparameters['privileged_promotion']
@@ -190,15 +258,20 @@ def ftl_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyper
 
 def simple_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
     hidden_sizes = [100, 100]
+    corr_type = None
+    l2 = 0.0
     if type(hyperparameters) is not dict:
         dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
     else:
         dropout = hyperparameters['dropout']
     if hyperparameters is not None:
+
         model = SimpleMLP(sensitive_attr=sens_attr,
                         hidden_sizes=hidden_sizes,
                         dropout=dropout,
-                        batch_size=64)
+                        batch_size=64,
+                        corr_type=corr_type,
+                        l2=l2)
     else:
         model = SimpleMLP(sensitive_attr=sens_attr,
                         hidden_sizes=[32],
@@ -206,6 +279,53 @@ def simple_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hy
                         batch_size=64)
     return model
 
+def mlp_preg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100, 100]
+    corr_type = 'pearson'
+    if type(hyperparameters) is not dict:
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2, 1e-3, 1e-4])
+        dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
+    else:
+        l2 = hyperparameters['l2']
+        dropout = hyperparameters['dropout']
+    if hyperparameters is not None:
+
+        model = SimpleMLP(sensitive_attr=sens_attr,
+                          hidden_sizes=hidden_sizes,
+                          dropout=dropout,
+                          batch_size=64,
+                          corr_type=corr_type,
+                          l2=l2)
+    else:
+        model = SimpleMLP(sensitive_attr=sens_attr,
+                          hidden_sizes=[32],
+                          dropout=0.1,
+                          batch_size=64)
+    return model
+
+def mlp_sreg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100, 100]
+    corr_type = 'spearman'
+    if type(hyperparameters) is not dict:
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2, 1e-3, 1e-4])
+        dropout = hyperparameters.suggest_float('dropout', 0.0, 0.2)
+    else:
+        l2 = hyperparameters['l2']
+        dropout = hyperparameters['dropout']
+    if hyperparameters is not None:
+
+        model = SimpleMLP(sensitive_attr=sens_attr,
+                          hidden_sizes=hidden_sizes,
+                          dropout=dropout,
+                          batch_size=64,
+                          corr_type=corr_type,
+                          l2=l2)
+    else:
+        model = SimpleMLP(sensitive_attr=sens_attr,
+                          hidden_sizes=[32],
+                          dropout=0.1,
+                          batch_size=64)
+    return model
 def prejudice_remover_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
     if type(hyperparameters) is not dict:
         eta = hyperparameters.suggest_float('eta', 0.0, 50.0)
@@ -330,8 +450,10 @@ methods = [
     #adaptative_priority_reweighting_classifier_initializer
     #meta_fair_classifier_sr_initializer,
     #gerry_fair_classifier_initializer,
-    #simple_mlp_initializer,
-    ftl_mlp_initializer
+    simple_mlp_initializer,
+    mlp_preg_initializer,
+    mlp_sreg_initializer
+    #ftl_mlp_initializer
     #adversarial_debiasing_initializer
     #prejudice_remover_initializer
 ]
