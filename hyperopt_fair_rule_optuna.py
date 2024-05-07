@@ -42,6 +42,7 @@ def eval(model, dataset, unprivileged_groups, privileged_groups, fitness_rule, h
         pos_ind = np.where(model.classes_ == dataset.favorable_label)[0][0]
         y_pred = (y_pred_prob[:, 1] > 0.5).astype(np.float64)
 
+
         y_pred_mapped = y_pred.copy()
         # Map the dataset labels to back to their original values.
         y_pred_mapped[y_pred == 0] = dataset.unfavorable_label
@@ -117,7 +118,8 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
         study = optuna.create_study(direction='maximize',
                                     study_name="{0}_{1}_{2}".format(fitness_rule.__name__,model_initializer.__name__,now) ,
                                     pruner=get_pruner(),
-                                    sampler=get_sampler())
+                                    sampler=get_sampler(),
+                                    storage=CONNECTION_STRING)
 
         study.optimize(objective, n_trials=N_TRIALS, n_jobs=N_JOBS)
 
