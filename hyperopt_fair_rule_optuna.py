@@ -8,7 +8,8 @@ from fitness_rules import *
 from dataset_readers import *
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import tensorflow.compat.v1 as tf_old
-tf_old.disable_eager_execution()
+#tf_old.disable_eager_execution()
+
 import numpy as np
 import gc
 import json
@@ -27,7 +28,6 @@ if CONNECTION_STRING is None:
     CONNECTION_STRING = 'mysql+pymysql://optuna:optuna@localhost:3306/optuna'
 start_time = datetime.now().strftime('%Y_%m_%d_%H_%M_%S_%f')
 
-tf_old.compat.v1.disable_eager_execution()
 
 def get_sampler():
     return TPESampler()
@@ -106,7 +106,7 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
     def objective(trial):
         # training
         trial_model = model_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=trial, fitness_rule=fitness_rule)
-        trial_model = trial_model.fit(dataset_train.copy())
+        trial_model = trial_model.fit(dataset_train.copy(), verbose=False)
         result = eval(trial_model, dataset_val.copy(), unprivileged_groups, privileged_groups, fitness_rule, trial)
         tune_results_history.append(result)
         return result['fitness']
@@ -128,7 +128,7 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
     else:
         model = model_initializer(sens_attr, unprivileged_groups, privileged_groups, fitness_rule=fitness_rule)
 
-    model = model.fit(dataset_expanded_train)
+    model = model.fit(dataset_expanded_train, verbose=False)
     best_result = eval(model, dataset_test, unprivileged_groups, privileged_groups, fitness_rule, study.best_params)
 
     best_result['tune_results_history'] = tune_results_history
@@ -175,6 +175,40 @@ def ftl_mlp_sreg_initializer(sens_attr, unprivileged_groups, privileged_groups, 
         model = FairTransitionLossMLP(sensitive_attr=sens_attr,
                                       hidden_sizes=hidden_sizes,
                                       dropout=dropout,
+                                      batch_size=64,
+                                      privileged_demotion=privileged_demotion,
+                                      privileged_promotion=privileged_promotion,
+                                      protected_demotion=protected_demotion,
+                                      protected_promotion=protected_promotion,
+                                      corr_type=corr_type, l2=l2)
+    else:
+        model = FairTransitionLossMLP(sensitive_attr=sens_attr,
+                                      hidden_sizes=[32],
+                                      dropout=0.1,
+                                      batch_size=64)
+    return model
+
+def ftl_mlp_auto_reg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100, 100]
+
+    if type(hyperparameters) is not dict:
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2, 1e-3, 1e-4])
+        corr_type = hyperparameters.suggest_categorical('corr_type', ['spearman', 'pearson', 'none'])
+        privileged_demotion = hyperparameters.suggest_float('privileged_demotion', 0.0, 1.0)
+        privileged_promotion = hyperparameters.suggest_float('privileged_promotion', 0.0, 1.0)
+        protected_demotion = hyperparameters.suggest_float('protected_demotion', 0.0, 1.0)
+        protected_promotion = hyperparameters.suggest_float('protected_promotion', 0.0, 1.0)
+    else:
+        l2 = hyperparameters['l2']
+        corr_type = hyperparameters['corr_type']
+        privileged_demotion = hyperparameters['privileged_demotion']
+        privileged_promotion = hyperparameters['privileged_promotion']
+        protected_demotion = hyperparameters['protected_demotion']
+        protected_promotion = hyperparameters['protected_promotion']
+
+    if hyperparameters is not None:
+        model = FairTransitionLossMLP(sensitive_attr=sens_attr,
+                                      hidden_sizes=hidden_sizes,
                                       batch_size=64,
                                       privileged_demotion=privileged_demotion,
                                       privileged_promotion=privileged_promotion,
@@ -279,6 +313,29 @@ def simple_mlp_initializer(sens_attr, unprivileged_groups, privileged_groups, hy
                         hidden_sizes=[32],
                         dropout=0.1,
                         batch_size=64)
+    return model
+
+def mlp_auto_reg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
+    hidden_sizes = [100, 100]
+
+    if type(hyperparameters) is not dict:
+        l2 = hyperparameters.suggest_categorical('l2', [1e-2, 1e-3, 1e-4])
+        corr_type = hyperparameters.suggest_categorical('corr_type', ['spearman', 'pearson', 'none'])
+    else:
+        l2 = hyperparameters['l2']
+        corr_type = hyperparameters['corr_type']
+    if hyperparameters is not None:
+
+        model = SimpleMLP(sensitive_attr=sens_attr,
+                          hidden_sizes=hidden_sizes,
+                          batch_size=64,
+                          corr_type=corr_type,
+                          l2=l2)
+    else:
+        model = SimpleMLP(sensitive_attr=sens_attr,
+                          hidden_sizes=[32],
+                          dropout=0.1,
+                          batch_size=64)
     return model
 
 def mlp_preg_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=None, fitness_rule=None):
@@ -433,7 +490,7 @@ def adaptative_priority_reweighting_classifier_initializer(sens_attr, unprivileg
 
 
 datasets = [
-    #adult_dataset_reader,
+    adult_dataset_reader,
     bank_dataset_reader,
     compas_dataset_reader,
     german_dataset_reader
@@ -452,12 +509,14 @@ methods = [
     #adaptative_priority_reweighting_classifier_initializer
     #meta_fair_classifier_sr_initializer,
     #gerry_fair_classifier_initializer,
-    ftl_mlp_initializer,
-    ftl_mlp_preg_initializer,
-    ftl_mlp_sreg_initializer
+    #ftl_mlp_initializer,
+    #ftl_mlp_preg_initializer,
+    #ftl_mlp_sreg_initializer
     #ftl_mlp_initializer
     #adversarial_debiasing_initializer
-    #prejudice_remover_initializer
+    #prejudice_remover_initializer,
+    ftl_mlp_auto_reg_initializer,
+    mlp_auto_reg_initializer
 ]
 
 results = []
@@ -477,6 +536,4 @@ for dataset_reader in datasets:
             results.append(result)
             results_df = pd.DataFrame(results)
             results_df.to_csv('raw_results/results_%s.csv' % start_time)
-            with open('raw_results/results_%s.json' % start_time, 'w') as file:
-                json.dump(results, file)
             gc.collect()

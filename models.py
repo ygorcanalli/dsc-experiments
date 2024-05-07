@@ -86,10 +86,14 @@ class SimpleMLP(Transformer):
         self.batch_size = batch_size
         self.dropout = dropout
         self.corr_type = corr_type
+
         if corr_type == 'spearman':
             self.corr_fn = spearmanr
-        else:
+        elif corr_type == 'pearson':
             self.corr_fn = pearsonr
+        else:
+            self.corr_fn = None
+            self.corr_type = None
         self.corr = None
         self.l2 = l2
         self.patience = patience
@@ -146,7 +150,7 @@ class SimpleMLP(Transformer):
         return self
 
     def predict_proba(self, X):
-        return self.model.predict(X)
+        return self.model.predict(X, verbose=False)
 
     def predict(self, X):
         logits = self.predict_proba(X)
@@ -174,8 +178,11 @@ class FairTransitionLossMLP(Transformer):
         self.corr_type = corr_type
         if corr_type == 'spearman':
             self.corr_fn = spearmanr
-        else:
+        elif corr_type == 'pearson':
             self.corr_fn = pearsonr
+        else:
+            self.corr_fn = None
+            self.corr_type = None
         self.corr = None
         self.l2 = l2
         self.patience = patience
@@ -237,7 +244,7 @@ class FairTransitionLossMLP(Transformer):
         return self
 
     def predict_proba(self, X):
-        return self.model.predict(X)
+        return self.model.predict(X, verbose=False)
 
     def predict(self, X):
         logits = self.predict_proba(X)
