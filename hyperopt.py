@@ -518,14 +518,14 @@ methods = [
     #gerry_fair_classifier_initializer,
     #ftl_mlp_initializer,
     #ftl_mlp_preg_initializer,
-    #ftl_mlp_sreg_initializer
-    #ftl_mlp_auto_reg_initializer,
+    #ftl_mlp_sreg_initializer,
+    ftl_mlp_auto_reg_initializer
     #adversarial_debiasing_initializer
     #prejudice_remover_initializer,
     #simple_mlp_initializer,
-    mlp_auto_reg_initializer,
-    mlp_preg_initializer,
-    mlp_sreg_initializer
+    #mlp_auto_reg_initializer,
+    #mlp_preg_initializer,
+    #mlp_sreg_initializer
 ]
 
 results = []
