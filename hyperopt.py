@@ -19,7 +19,7 @@ from optuna.pruners import HyperbandPruner
 from optuna.samplers import TPESampler
 
 N_TRIALS = 100
-N_JOBS = 6
+DEFAULT_N_JOBS = 6
 SAMPLER = TPESampler
 PRUNER = HyperbandPruner
 CONNECTION_STRING = os.environ.get('CONNECTION_STRING')
@@ -27,6 +27,12 @@ if CONNECTION_STRING is None:
     CONNECTION_STRING = 'mysql+pymysql://optuna:optuna@localhost:3306/optuna'
 start_time = datetime.now().strftime('%Y_%m_%d_%H_%M_%S_%f')
 
+def get_n_jobs():
+    env_n_jobs = os.getenv('OPTUNA_N_JOBS')
+    if env_n_jobs is not None:
+        return int(env_n_jobs)
+    else:
+        return DEFAULT_N_JOBS
 
 def get_sampler():
     return TPESampler()
@@ -120,7 +126,7 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
                                     sampler=get_sampler(),
                                     storage=CONNECTION_STRING)
 
-        study.optimize(objective, n_trials=N_TRIALS, n_jobs=N_JOBS)
+        study.optimize(objective, n_trials=N_TRIALS, n_jobs=get_n_jobs())
 
         # eval on test set
         model = model_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=study.best_params, fitness_rule=fitness_rule)
@@ -511,11 +517,13 @@ methods = [
     #ftl_mlp_initializer,
     #ftl_mlp_preg_initializer,
     #ftl_mlp_sreg_initializer
-    #ftl_mlp_initializer
+    #ftl_mlp_auto_reg_initializer,
     #adversarial_debiasing_initializer
     #prejudice_remover_initializer,
-    ftl_mlp_auto_reg_initializer,
-    mlp_auto_reg_initializer
+    #simple_mlp_initializer,
+    mlp_auto_reg_initializer,
+    mlp_preg_initializer,
+    mlp_sreg_initializer
 ]
 
 results = []
