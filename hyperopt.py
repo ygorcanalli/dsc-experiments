@@ -12,7 +12,6 @@ import tensorflow.compat.v1 as tf_old
 
 import numpy as np
 import gc
-import json
 import os
 import optuna
 from util import mathew_correlation_coefficient, f1_score
@@ -20,7 +19,7 @@ from optuna.pruners import HyperbandPruner
 from optuna.samplers import TPESampler
 
 N_TRIALS = 100
-N_JOBS = 5
+N_JOBS = 6
 SAMPLER = TPESampler
 PRUNER = HyperbandPruner
 CONNECTION_STRING = os.environ.get('CONNECTION_STRING')
