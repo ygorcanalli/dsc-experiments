@@ -126,7 +126,9 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
                                     sampler=get_sampler(),
                                     storage=CONNECTION_STRING)
 
-        study.optimize(objective, n_trials=N_TRIALS, n_jobs=get_n_jobs())
+        N_JOBS = get_n_jobs()
+        print(f"optimizing with {N_JOBS} jobs")
+        study.optimize(objective, n_trials=N_TRIALS, n_jobs=N_JOBS)
 
         # eval on test set
         model = model_initializer(sens_attr, unprivileged_groups, privileged_groups, hyperparameters=study.best_params, fitness_rule=fitness_rule)
