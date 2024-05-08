@@ -131,19 +131,23 @@ class SimpleMLP(Transformer):
         callback = EarlyStopping(monitor='val_loss', patience=self.patience, restore_best_weights=True)
         dataset_cp = dataset.copy()
         X = dataset_cp.features
-        y_expanded = np.zeros(shape=(X.shape[0], 2))
+        y = np.zeros(shape=(X.shape[0], 2))
 
-        y_expanded[:, 0] = (dataset_cp.labels == dataset_cp.unfavorable_label).reshape(X.shape[0]).astype(int)
-        y_expanded[:, 1] = (dataset_cp.labels == dataset_cp.favorable_label).reshape(X.shape[0]).astype(int)
+        y[:, 0] = (dataset_cp.labels == dataset_cp.unfavorable_label).reshape(X.shape[0]).astype(int)
+        y[:, 1] = (dataset_cp.labels == dataset_cp.favorable_label).reshape(X.shape[0]).astype(int)
+
+        sensitive_index = dataset.protected_attribute_names.index(self.sensitive_attr)
+        X_protected = (dataset.protected_attributes[:, sensitive_index] == dataset.unprivileged_protected_attributes[
+            sensitive_index]).astype(int)
 
         if self.model is None:
             self.input_shape = dataset.features.shape[1]
             if self.corr_type is not None:
-                self._calculate_corr(dataset.features, y_expanded[:, 1])
+                self._calculate_corr(dataset.features, X_protected)
             self._compile_model()
             self.classes_ = np.array([dataset.unfavorable_label, dataset.favorable_label])
 
-        self.history = self.model.fit(X, y_expanded, epochs=self.num_epochs,
+        self.history = self.model.fit(X, y, epochs=self.num_epochs,
                                       batch_size=self.batch_size, callbacks=[callback],
                                       verbose=verbose, validation_split=0.1)
 
