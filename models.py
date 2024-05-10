@@ -9,6 +9,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers.legacy import Adam
 from aif360.algorithms import Transformer
 from tensorflow.keras import backend as K
+from xicorrelation import xicorr
 
 import logging
 import os
@@ -91,6 +92,8 @@ class SimpleMLP(Transformer):
             self.corr_fn = spearmanr
         elif corr_type == 'pearson':
             self.corr_fn = pearsonr
+        elif corr_type == 'xi':
+            self.corr_fn = xicorr
         else:
             self.corr_fn = None
             self.corr_type = None
@@ -184,6 +187,8 @@ class FairTransitionLossMLP(Transformer):
             self.corr_fn = spearmanr
         elif corr_type == 'pearson':
             self.corr_fn = pearsonr
+        elif corr_type == 'xi':
+            self.corr_fn = xicorr
         else:
             self.corr_fn = None
             self.corr_type = None
