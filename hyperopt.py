@@ -123,8 +123,8 @@ def tune_model(dataset_reader, model_initializer, fitness_rule):
         study = optuna.create_study(direction='maximize',
                                     study_name="{0}_{1}_{2}".format(fitness_rule.__name__,model_initializer.__name__,now) ,
                                     pruner=get_pruner(),
-                                    sampler=get_sampler(),
-                                    storage=CONNECTION_STRING)
+                                    sampler=get_sampler())#,
+                                    #storage=CONNECTION_STRING)
 
         N_JOBS = get_n_jobs()
         print(f"optimizing with {N_JOBS} jobs")
@@ -575,10 +575,10 @@ methods = [
     #adaptative_priority_reweighting_classifier_initializer
     #meta_fair_classifier_sr_initializer,
     #gerry_fair_classifier_initializer,
-    #ftl_mlp_initializer,
+    ftl_mlp_initializer,
     #ftl_mlp_preg_initializer,
     #ftl_mlp_sreg_initializer,
-    ftl_mlp_xi_reg_initializer,
+    #ftl_mlp_xi_reg_initializer,
     #ftl_mlp_auto_reg_initializer,
     #adversarial_debiasing_initializer
     #prejudice_remover_initializer,
@@ -586,7 +586,7 @@ methods = [
     #mlp_auto_reg_initializer,
     #mlp_preg_initializer,
     #mlp_sreg_initializer
-    mlp_xi_reg_initializer
+    #mlp_xi_reg_initializer
 ]
 
 results = []
