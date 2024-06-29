@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import spearmanr, pearsonr
+from scipy.stats import spearmanr, pearsonr, kendalltau
 from tensorflow import broadcast_to, expand_dims
 from tensorflow.keras import Sequential
 from tensorflow.keras.regularizers import Regularizer, L1, L2, L1L2
@@ -92,6 +92,8 @@ class SimpleMLP(Transformer):
             self.corr_fn = spearmanr
         elif corr_type == 'pearson':
             self.corr_fn = pearsonr
+        elif corr_type == 'kendall':
+            self.corr_fn = kendalltau
         elif corr_type == 'xi':
             self.corr_fn = xicorr
         else:
@@ -113,17 +115,32 @@ class SimpleMLP(Transformer):
     def _compile_model(self):
         self.model = Sequential()
         self.model.add(InputLayer(input_shape=self.input_shape))
-        if self.corr is not None:
+        if self.corr is not None and self.corr != 'standard_l2':
             regularizer = FeaturewiseRegularizer(l2=self.l2, lambdas=self.corr)
+            for i, hidden_size in enumerate(self.hidden_sizes):
+                if i == 0:
+                    self.model.add(Dense(units=hidden_size, activation='relu',
+                                         kernel_regularizer=regularizer))
+                else:
+                    self.model.add(Dense(hidden_size, activation='relu'))
+                    self.model.add(Dropout(self.dropout))
+        elif self.corr == 'standard_l2':
+            regularizer = L2(self.l2)
+            for i, hidden_size in enumerate(self.hidden_sizes):
+                if i == 0:
+                    self.model.add(Dense(units=hidden_size, activation='relu',
+                                         kernel_regularizer=regularizer))
+                else:
+                    self.model.add(Dense(hidden_size, activation='relu'), kernel_regularizer=regularizer)
+                    self.model.add(Dropout(self.dropout))
         else:
-            regularizer = None
-        for i, hidden_size in enumerate(self.hidden_sizes):
-            if i == 0:
-                self.model.add(Dense(units=hidden_size, activation='relu',
-                                     kernel_regularizer=regularizer))
-            else:
-                self.model.add(Dense(hidden_size, activation='relu'))
-                self.model.add(Dropout(self.dropout))
+            for i, hidden_size in enumerate(self.hidden_sizes):
+                if i == 0:
+                    self.model.add(Dense(units=hidden_size, activation='relu'))
+                else:
+                    self.model.add(Dense(hidden_size, activation='relu'))
+                    self.model.add(Dropout(self.dropout))
+
 
         self.model.add(Dense(self.num_classes, activation="softmax"))
         self.model.compile(optimizer=Adam(learning_rate=3e-4),
@@ -187,6 +204,8 @@ class FairTransitionLossMLP(Transformer):
             self.corr_fn = spearmanr
         elif corr_type == 'pearson':
             self.corr_fn = pearsonr
+        elif corr_type == 'kendall':
+            self.corr_fn = kendalltau
         elif corr_type == 'xi':
             self.corr_fn = xicorr
         else:
